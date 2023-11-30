@@ -44,7 +44,9 @@ class LitMan:
                 "original_file": os.path.abspath(config.file),
                 "tags": [config.category.lower()] + [t.lower() for t in config.tags],
                 "notes": [],
+                "important": False,
                 "printed": False,
+                "to_read": True,
                 "references": [],
                 "citations": []
             }
@@ -69,8 +71,6 @@ class LitMan:
         ref = litman_db[config.ref]
 
         # Make edits
-        if config.printed is not None and config.printed:
-            ref["printed"] = True
         if config.add_tag is not None:
             ref["tags"].append(config.add_tag)
         if config.rm_tag is not None:
@@ -126,6 +126,22 @@ class LitMan:
                 litman_db = pickle.load(litman_pickle_file)
         return litman_db
 
+    def Mark(self, config):
+        # Find the requested reference
+        litman_db = self.LoadDB(config)
+        if config.ref not in litman_db:
+            raise ValueError("Requested reference {} not in database.".format(config.ref))
+        ref = litman_db[config.ref]
+
+        if config.important is not None and config.important:
+            ref["important"] = True
+        if config.printed is not None and config.printed:
+            ref["printed"] = True
+        if config.to_read is not None and config.to_read:
+            ref["to_read"] = True
+
+        self.Resave(litman_db)
+
     def Note(self, config):
         # Find the requested reference
         litman_db = self.LoadDB(config)
@@ -152,25 +168,33 @@ class LitMan:
         os.system("open {}".format(file_list))
 
     def Print(self, litman_db, entries, config):
-        
+        # This flashes because I got carried away with the ANSI formatting
         print("\033[1;5m\nMatching entries:\033[0m\n")
-        
+
+        # Print each selected entry
         for entry in entries:
-            print("{}: \033[7m{}\033[0m\n  {}\n    {}\n    {} {} {} ({})"
+
+            # Basic information
+            print("{}:{}{}{}{}\n  {}\n    {}\n    {} {} {} ({})"
                   .format('\033[34m{}\033[30m'.format(entry['label']),
-                          "Printed" if entry["printed"] else "",
+                          " \033[7mImportant\033[0m" if entry["important"] else "",
+                          " \033[7mPrinted\033[0m" if entry["printed"] else "",
+                          " \033[7mTo Read\033[0m" if entry["to_read"] else "",
+                          " \033[7mNotes\033[0m" if entry["notes"] else "",
                           '\033[4m{}\033[0m'.format(entry['title']),
                           '\033[3m{}\033[0m'.format(', '.join(entry['authors'])),
                           entry['journal'],
                           '\033[1m{}\033[0m'.format(entry['issue']),
                           entry['number'],
                           entry['year']))
-            
+
+            # Tags and notes
             if not config.compact:
                 print("  (\033[31m{}\033[30m)".format(' '.join(entry['tags'])))
                 for note in entry['notes']:
                     print("\033[2m    - {}\033[0m".format(note))
 
+            # Links
             if config.links:
                 print("  \033[32mCitations:\033[0m")
                 for citation in entry['citations']:
@@ -180,7 +204,7 @@ class LitMan:
                 for reference in entry['references']:
                     ref = litman_db[reference]
                     print("    - {}: {}".format(ref['label'], ref['title']))
-                
+
             print()
 
     def Resave(self, litman_db):
@@ -223,6 +247,20 @@ class LitMan:
                         remove.append(i_entry)
             entries = [e for i,e in enumerate(entries) if i not in remove]
 
+        # Markers
+        if config.important:
+            keep = []
+            for i_entry,entry in enumerate(entries):
+                if entry['important']:
+                    keep.append(i_entry)
+            entries = [e for i,e in enumerate(entries) if i in keep]
+        if config.to_read:
+            keep = []
+            for i_entry,entry in enumerate(entries):
+                if entry['to_read']:
+                    keep.append(i_entry)
+            entries = [e for i,e in enumerate(entries) if i in keep]
+
         return entries
 
 def ParseArguments():
@@ -262,8 +300,6 @@ def ParseArguments():
     edit_parser = subparser.add_parser("edit", help="Edit existing reference.")
     edit_parser.add_argument("--ref", type=str, required=True,
                              help="LitMan reference.")
-    edit_parser.add_argument("--printed", action="store_true",
-                             help="Add note to the reference that it has been printed.")
     edit_parser.add_argument("--add_tag", type=str,
                              help="Add tag to reference.")
     edit_parser.add_argument("--rm_tag", type=str,
@@ -283,6 +319,19 @@ def ParseArguments():
     edit_parser.add_argument("--year", type=int,
                              help="Publication year.")
 
+    # Mark
+    mark_parser = subparser.add_parser("mark", help="Mark reference with label.")
+    mark_parser.add_argument("--ref", type=str, required=True,
+                             help="Reference in LitMan to mark.")
+    mark_parser.add_argument("--important", action='store_true',
+                             help="Mark reference as important.")
+    mark_parser.add_argument("--printed", action='store_true',
+                             help="Add note to the reference that it has been printed.")
+    mark_parser.add_argument("--to_read", action='store_true',
+                             help="Mark reference as to-read.")
+    mark_parser.add_argument("--read", action='store_true',
+                             help="Mark reference as read.")
+
     # Link
     link_parser = subparser.add_parser("link", help="Link references.")
     link_parser.add_argument("--ref", type=str, required=True,
@@ -298,6 +347,10 @@ def ParseArguments():
                              help="LitMan reference.")
     list_parser.add_argument("--authors", type=str, nargs='+',
                              help="Authors to filter.")
+    list_parser.add_argument("--important", action='store_true',
+                             help="List only references marked as important.")
+    list_parser.add_argument("--to_read", action='store_true',
+                             help="List only references marked as to-read.")
     list_parser.add_argument("--compact", action='store_true',
                              help="Print items in a compact view.")
     list_parser.add_argument("--links", action='store_true',
@@ -341,6 +394,8 @@ def main():
             litman.Add(config)
         case "edit":
             litman.Edit(config)
+        case "mark":
+            litman.Mark(config)
         case "link":
             litman.Link(config)
         case "list":
