@@ -5,6 +5,54 @@ import argparse
 import yaml
 import pickle
 
+class LitManReference:
+    def __init__(self, config=None):
+        self.category = "" if not config or 'category' not in config else config.category
+        self.title = "" if not config or 'title' not in config else config.title
+        self.authors = [""] if not config or 'authors' not in config else config.authors
+        self.year = -1 if not config or 'year' not in config else config.year
+        self.file = "" if not config or 'file' not in config else os.path.abspath(config.file)
+        self.tags = [""] if not config or 'tags' not in config else config.tags
+
+    def InitData(self):
+        self.original_file = ""
+        self.notes = []
+        self.important = False
+        self.printed = False
+        self.to_read = True
+        self.references = []
+        self.citations = []
+
+class LitManArticle(LitManReference):
+    def __init__(self, config=None):
+        LitManReference.__init__(self, config)
+        self.journal = "" if not config or 'journal' not in config else config.journal
+        self.issue = -1 if not config or 'issue' not in config else config.issue
+        self.number = "" if not config or 'number' not in config else config.number
+        if config is not None:
+            journal_strip = self.journal.replace(' ', '').replace('.', '')
+            self.label = journal_strip+'_'+str(self.issue)+'_'+self.number+'_'+str(self.year)
+
+class LitManConference(LitManReference):
+    def __init__(self, config=None):
+        LitManReference.__init__(self, config)
+        self.conference = "" if not config or 'conference' not in config else config.conference
+        self.location = "" if not config or 'location' not in config else config.location
+        self.number = -1 if not config or 'number' not in config else config.number
+        if config is not None:
+            conference_strip = self.conference.replace(' ', '').replace('.', '')
+            self.label = conference_strip+'_'+str(self.number)+'_'+str(self.year)
+
+class LitManThesis(LitManReference):
+    def __init__(self, config=None):
+        LitManReference.__init__(self, config)
+        self.university = "" if not config or 'university' not in config else config.university
+        self.department = "" if not config or 'department' not in config else config.department
+        if config is not None:
+            author_strip = self.authors[0].strip().split()[1]
+            university_strip = self.university.replace(' ', '').replace('.', '')
+            self.label = author_strip+'_'+university_strip+'_'+str(self.year)
+
 class LitMan:
     def __init__(self, directory):
         self.LitManDir = directory
@@ -18,41 +66,30 @@ class LitMan:
 
     def Add(self, config):
 
-        # Define a custom reference format
-        journal_strip = config.journal.replace(' ', '').replace('.', '')
-        label = journal_strip+'_'+str(config.issue)+'_'+config.number+'_'+str(config.year)
+        # Make reference object
+        match config.type:
+            case "article":
+                new_ref = LitManArticle(config)
+            case "conference":
+                new_ref = LitManConference(config)
+            case "thesis":
+                new_ref = LitManThesis(config)
+        new_ref.InitData()
+        new_ref.tags += [new_ref.category.lower()]
 
         # Copy file
         copy_path = '{}/{}'.format(self.LitManFiles, config.category.lower())
         if not os.path.exists(copy_path):
             os.mkdir(copy_path)
         extension = os.path.splitext(os.path.basename(config.file))[1]
-        copy_file = '{}/{}'.format(copy_path, label+extension)
+        copy_file = '{}/{}'.format(copy_path, new_ref.label+extension)
         shutil.copy(config.file, copy_file)
+        new_ref.original_file = config.file
+        new_ref.file = copy_file
 
         # Add to database
-        new_ref = {
-            label: {
-                "label": label,
-                "title": config.title,
-                "authors": config.authors,
-                "journal": config.journal,
-                "issue": config.issue,
-                "number": config.number,
-                "year": config.year,
-                "file": os.path.abspath(copy_file),
-                "original_file": os.path.abspath(config.file),
-                "tags": [config.category.lower()] + [t.lower() for t in config.tags],
-                "notes": [],
-                "important": False,
-                "printed": False,
-                "to_read": True,
-                "references": [],
-                "citations": []
-            }
-        }
         with open(self.LitManDB, 'a') as outfile:
-            yaml.dump(new_ref, outfile, default_flow_style=False, allow_unicode=True)
+            yaml.dump(dict({new_ref.label: vars(new_ref)}), outfile, default_flow_style=False, allow_unicode=True)
         self.Cache()
 
     def Cache(self):
@@ -77,18 +114,6 @@ class LitMan:
             ref["tags"].remove(config.rm_tag)
         if config.rm_note is not None:
             del ref["notes"][config.rm_note]
-        if config.title is not None:
-            ref["title"] = config.title
-        if config.authors is not None:
-            ref["authors"] = config.authors
-        if config.journal is not None:
-            ref["journal"] = config.journal
-        if config.issue is not None:
-            ref["issue"] = config.issue
-        if config.number is not None:
-            ref["number"] = config.number
-        if config.year is not None:
-            ref["year"] = config.year
 
         self.Resave(litman_db)
 
@@ -248,13 +273,13 @@ class LitMan:
             entries = [e for i,e in enumerate(entries) if i not in remove]
 
         # Markers
-        if config.important:
+        if 'important' in config and config.important:
             keep = []
             for i_entry,entry in enumerate(entries):
                 if entry['important']:
                     keep.append(i_entry)
             entries = [e for i,e in enumerate(entries) if i in keep]
-        if config.to_read:
+        if 'to_read' in config and config.to_read:
             keep = []
             for i_entry,entry in enumerate(entries):
                 if entry['to_read']:
@@ -277,24 +302,29 @@ def ParseArguments():
 
     # Add
     add_parser = subparser.add_parser("add", help="Add reference to LitMan.")
-    add_parser.add_argument("--category", type=str, required=True, choices=["accelerator", "neutrino"],
-                            help="Paper category.")
-    add_parser.add_argument("--title", type=str, required=True,
-                            help="Title.")
-    add_parser.add_argument("--authors", type=str, nargs='+', required=True,
-                            help="Authors.")
-    add_parser.add_argument("--journal", type=str, required=True,
-                            help="Journal.")
-    add_parser.add_argument("--issue", type=int, required=True,
-                            help="Journal issue.")
-    add_parser.add_argument("--number", type=str, required=True,
-                            help="Article number.")
-    add_parser.add_argument("--year", type=int, required=True,
-                            help="Publication year.")
-    add_parser.add_argument("--file", type=str, required=True,
-                             help="Document file.")
-    add_parser.add_argument("--tags", type=str, nargs='+', required=True,
-                            help="Tags for organizing and retrieving the reference.")
+    add_subparser = add_parser.add_subparsers(title="literature type", dest="type")
+    add_subparser.required = True
+
+    article_parser = add_subparser.add_parser("article", help="Add article-type reference.")
+    article_object = LitManArticle()
+    for var in vars(article_object):
+        article_parser.add_argument("--{}".format(var), required=True,
+                                    type=type(vars(article_object)[var][0]) if type(vars(article_object)[var])==list else type(var),
+                                    nargs='+' if type(vars(article_object)[var])==list else '?')
+
+    conference_parser = add_subparser.add_parser("conference", help="Add conference-type reference.")
+    conference_object = LitManConference()
+    for var in vars(conference_object):
+        conference_parser.add_argument("--{}".format(var), required=True,
+                                       type=type(vars(conference_object)[var][0]) if type(vars(conference_object)[var])==list else type(var),
+                                       nargs='+' if type(vars(conference_object)[var])==list else 1)
+
+    thesis_parser = add_subparser.add_parser("thesis", help="Add thesis-type reference.")
+    thesis_object = LitManThesis()
+    for var in vars(thesis_object):
+        thesis_parser.add_argument("--{}".format(var), required=True,
+                                   type=type(vars(thesis_object)[var][0]) if type(vars(thesis_object)[var])==list else type(var),
+                                   nargs='+' if type(vars(thesis_object)[var])==list else 1)
 
     # Edit
     edit_parser = subparser.add_parser("edit", help="Edit existing reference.")
@@ -306,18 +336,6 @@ def ParseArguments():
                              help="Remove tag from reference.")
     edit_parser.add_argument("--rm_note", type=int,
                              help="Remove note (by note index, starting from 0) from reference.")
-    edit_parser.add_argument("--title", type=str,
-                             help="Title.")
-    edit_parser.add_argument("--authors", type=str, nargs='+',
-                             help="Authors.")
-    edit_parser.add_argument("--journal", type=str,
-                             help="Journal.")
-    edit_parser.add_argument("--issue", type=int,
-                             help="Journal issue.")
-    edit_parser.add_argument("--number", type=str,
-                             help="Article number.")
-    edit_parser.add_argument("--year", type=int,
-                             help="Publication year.")
 
     # Mark
     mark_parser = subparser.add_parser("mark", help="Mark reference with label.")
