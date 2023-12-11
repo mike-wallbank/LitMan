@@ -34,8 +34,11 @@ class LitManReference:
         self.file = os.path.abspath(config.file)
         self.tags = config.tags + [config.category.lower()]
         self.tags.sort()
+        self.important = config.important
+        self.printed = config.printed
+        self.read = config.read
         self.original_file = None
-        self.notes = [""]
+        self.notes = []
         self.references = []
         self.citations = []
 
@@ -77,7 +80,7 @@ class LitManConference(LitManReference):
         super().InitRequiredAttributes()
         self.conference = ""
         self.location = ""
-        self.number = -1
+        self.number = ""
 
     def Initialize(self, config):
         super().Initialize(config)
@@ -208,17 +211,11 @@ class LitMan:
         # Make edits
         if config.add_tag is not None:
             ref["tags"].append(config.add_tag)
+            ref["tags"].sort()
         if config.rm_tag is not None:
             ref["tags"].remove(config.rm_tag)
         if config.rm_note is not None:
             del ref["notes"][config.rm_note]
-
-        # Edit the reference details
-        if config.type is not None:# and config.type == "article":
-            print("Editing reference details is not yet implemented.")
-            # article_object = LitManArticle()
-            # for var in vars(article_object):
-            #     if var in config
 
         self.Resave(litman_db)
 
@@ -293,7 +290,8 @@ class LitMan:
         litman_db = self.LoadDB(config)
         entries = self.Winnow(litman_db, config)
         if not len(entries):
-            print("\nNo entries found.\n")
+            print("\033[5;1m\nNo entries found.\n\033[0m")
+            exit()
         if config.all:
             file_list = " ".join([e['file'] for e in entries])
         else:
