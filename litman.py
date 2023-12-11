@@ -21,7 +21,6 @@ class LitManReference:
         self.year = -1
         self.file = ""
         self.tags = [""]
-        self.notes = [""]
         self.important = False
         self.printed = False
         self.read = False
@@ -36,6 +35,7 @@ class LitManReference:
         self.tags = config.tags + [config.category.lower()]
         self.tags.sort()
         self.original_file = None
+        self.notes = [""]
         self.references = []
         self.citations = []
 
@@ -309,7 +309,7 @@ class LitMan:
         for entry in entries:
 
             # Basic information
-            print("{}:{}{}{}{}\n  {}\n    {})"
+            print("{}:{}{}{}{}\n  {}\n    {}"
                   .format('\033[34m{}\033[30m'.format(entry['label']),
                           " \033[7mImportant\033[0m" if entry["important"] else "",
                           " \033[7mPrinted\033[0m" if entry["printed"] else "",
