@@ -1,57 +1,152 @@
 #!/usr/bin/env python3
 
 import os, shutil
-import argparse
-import yaml
-import pickle
+import argparse, yaml
+import copy, pickle
 
+# Reference types are defined as class objects.
+# Change and add properties by modifying these structures.
+# The base class holds the basic information common across
+# all reference types.  Each type can implement its own
+# specific properties; each type is also required to define
+# a label format for bookkeeping and referencing, and an
+# output format for printing.
+
+# Base class
 class LitManReference:
-    def __init__(self, config=None):
-        self.category = "" if not config or 'category' not in config else config.category
-        self.title = "" if not config or 'title' not in config else config.title
-        self.authors = [""] if not config or 'authors' not in config else config.authors
-        self.year = -1 if not config or 'year' not in config else config.year
-        self.file = "" if not config or 'file' not in config else os.path.abspath(config.file)
-        self.tags = [""] if not config or 'tags' not in config else config.tags
-
-    def InitData(self):
-        self.original_file = ""
-        self.notes = []
+    def InitRequiredAttributes(self):
+        self.category = ""
+        self.title = ""
+        self.authors = [""]
+        self.year = -1
+        self.file = ""
+        self.tags = [""]
+        self.notes = [""]
         self.important = False
         self.printed = False
-        self.to_read = True
+        self.read = False
+
+    def Initialize(self, config):
+        self.type = config.type
+        self.category = config.category
+        self.title = config.title
+        self.authors = config.authors
+        self.year = config.year
+        self.file = os.path.abspath(config.file)
+        self.tags = config.tags + [config.category.lower()]
+        self.tags.sort()
+        self.original_file = None
         self.references = []
         self.citations = []
 
+# Article class
 class LitManArticle(LitManReference):
-    def __init__(self, config=None):
-        LitManReference.__init__(self, config)
-        self.journal = "" if not config or 'journal' not in config else config.journal
-        self.issue = -1 if not config or 'issue' not in config else config.issue
-        self.number = "" if not config or 'number' not in config else config.number
-        if config is not None:
-            journal_strip = self.journal.replace(' ', '').replace('.', '')
-            self.label = journal_strip+'_'+str(self.issue)+'_'+self.number+'_'+str(self.year)
+    def __init__(self):
+        self.InitRequiredAttributes()
 
+    def InitRequiredAttributes(self):
+        super().InitRequiredAttributes()
+        self.journal = ""
+        self.issue = -1
+        self.number = ""
+
+    def Initialize(self, config):
+        super().Initialize(config)
+        self.journal = config.journal
+        self.issue = config.issue
+        self.number = config.number
+        self.Label()
+
+    def Label(self):
+        journal_strip = self.journal.replace(' ', '').replace('.', '')
+        self.label = journal_strip+'_'+str(self.issue)+'_'+self.number+'_'+str(self.year)
+
+    @staticmethod
+    def FormatSpecificInfo(article):
+        return "{} {} {}".format(article['journal'],
+                                 '\033[1m{}\033[0m'.format(article['issue']),
+                                 article['number'])
+
+
+# Conference class
 class LitManConference(LitManReference):
-    def __init__(self, config=None):
-        LitManReference.__init__(self, config)
-        self.conference = "" if not config or 'conference' not in config else config.conference
-        self.location = "" if not config or 'location' not in config else config.location
-        self.number = -1 if not config or 'number' not in config else config.number
-        if config is not None:
-            conference_strip = self.conference.replace(' ', '').replace('.', '')
-            self.label = conference_strip+'_'+str(self.number)+'_'+str(self.year)
+    def __init__(self):
+        self.InitRequiredAttributes()
 
+    def InitRequiredAttributes(self):
+        super().InitRequiredAttributes()
+        self.conference = ""
+        self.location = ""
+        self.number = -1
+
+    def Initialize(self, config):
+        super().Initialize(config)
+        self.conference = config.conference
+        self.location = config.location
+        self.number = config.number
+        self.Label()
+
+    def Label(self):
+        conference_strip = self.conference.replace(' ', '').replace('.', '')
+        self.label = conference_strip+'_'+str(self.number)+'_'+str(self.year)
+
+    @staticmethod
+    def FormatSpecificInfo(conference):
+        return "{}, {} {}".format(conference['conference'],
+                                  conference['location'],
+                                  conference['number'])
+
+# Note class
+class LitManNote(LitManReference):
+    def __init__(self):
+        self.InitRequiredAttributes()
+
+    def InitRequiredAttributes(self):
+        super().InitRequiredAttributes()
+        self.name = ""
+
+    def Initialize(self, config):
+        super().Initialize(config)
+        self.name = config.name
+        self.Label()
+
+    def Label(self):
+        name_strip = self.name.replace(' ', '').replace('.', '')
+        self.label = name_strip+'_'+str(self.year)
+
+    @staticmethod
+    def FormatSpecificInfo(note):
+        return note['name']
+
+# Thesis class
 class LitManThesis(LitManReference):
-    def __init__(self, config=None):
-        LitManReference.__init__(self, config)
-        self.university = "" if not config or 'university' not in config else config.university
-        self.department = "" if not config or 'department' not in config else config.department
-        if config is not None:
-            author_strip = self.authors[0].strip().split()[1]
-            university_strip = self.university.replace(' ', '').replace('.', '')
-            self.label = author_strip+'_'+university_strip+'_'+str(self.year)
+    def __init__(self):
+        self.InitRequiredAttributes()
+
+    def InitRequiredAttributes(self):
+        super().InitRequiredAttributes()
+        self.university = ""
+        self.department = ""
+
+    def Initialize(self, config):
+        super().Initialize(config)
+        self.university = config.university
+        self.department = config.department
+        self.Label()
+
+    def Label(self):
+        author_strip = self.authors[0].strip().split()[1]
+        university_strip = self.university.replace(' ', '').replace('.', '')
+        self.label = author_strip+'_'+university_strip+'_'+str(self.year)
+
+    @staticmethod
+    def FormatSpecificInfo(thesis):
+        return "{}, {}".format(thesis['university'], thesis['department'])
+
+reference_types = {"article":LitManArticle(),
+                   "conference":LitManConference(),
+                   "note":LitManNote(),
+                   "thesis":LitManThesis()}
 
 class LitMan:
     def __init__(self, directory):
@@ -67,15 +162,13 @@ class LitMan:
     def Add(self, config):
 
         # Make reference object
-        match config.type:
-            case "article":
-                new_ref = LitManArticle(config)
-            case "conference":
-                new_ref = LitManConference(config)
-            case "thesis":
-                new_ref = LitManThesis(config)
-        new_ref.InitData()
-        new_ref.tags += [new_ref.category.lower()]
+        new_ref = copy.deepcopy(reference_types[config.type])
+        new_ref.Initialize(config)
+
+        # Ensure this is a new entry
+        litman_db = self.LoadDB(config)
+        if new_ref.label in litman_db:
+            raise NameError("Reference {} already exists in database.".format(new_ref.label))
 
         # Copy file
         copy_path = '{}/{}'.format(self.LitManFiles, config.category.lower())
@@ -84,8 +177,13 @@ class LitMan:
         extension = os.path.splitext(os.path.basename(config.file))[1]
         copy_file = '{}/{}'.format(copy_path, new_ref.label+extension)
         shutil.copy(config.file, copy_file)
-        new_ref.original_file = config.file
         new_ref.file = copy_file
+
+        # Remove original file
+        if not config.keep_original_file:
+            os.remove(config.file)
+        else:
+            new_ref.original_file = config.file
 
         # Add to database
         with open(self.LitManDB, 'a') as outfile:
@@ -115,6 +213,13 @@ class LitMan:
         if config.rm_note is not None:
             del ref["notes"][config.rm_note]
 
+        # Edit the reference details
+        if config.type is not None:# and config.type == "article":
+            print("Editing reference details is not yet implemented.")
+            # article_object = LitManArticle()
+            # for var in vars(article_object):
+            #     if var in config
+
         self.Resave(litman_db)
 
     def Link(self, config):
@@ -140,7 +245,7 @@ class LitMan:
     def List(self, config):
         litman_db = self.LoadDB(config)
         entries = self.Winnow(litman_db, config)
-        self.Print(litman_db, entries, config)
+        self.PrintReferences(litman_db, entries, config)
 
     def LoadDB(self, config):
         if config.no_cache:
@@ -158,12 +263,15 @@ class LitMan:
             raise ValueError("Requested reference {} not in database.".format(config.ref))
         ref = litman_db[config.ref]
 
+        # Mark with requested tag
         if config.important is not None and config.important:
             ref["important"] = True
         if config.printed is not None and config.printed:
             ref["printed"] = True
         if config.to_read is not None and config.to_read:
-            ref["to_read"] = True
+            ref["read"] = False
+        if config.read is not None and config.read:
+            ref["read"] = True
 
         self.Resave(litman_db)
 
@@ -192,26 +300,27 @@ class LitMan:
             file_list = entries[0]['file']
         os.system("open {}".format(file_list))
 
-    def Print(self, litman_db, entries, config):
-        # This flashes because I got carried away with the ANSI formatting
+    def PrintReferences(self, litman_db, entries, config):
+        # This flashes because I got carried away
+        # with the ANSI formatting
         print("\033[1;5m\nMatching entries:\033[0m\n")
 
         # Print each selected entry
         for entry in entries:
 
             # Basic information
-            print("{}:{}{}{}{}\n  {}\n    {}\n    {} {} {} ({})"
+            print("{}:{}{}{}{}\n  {}\n    {})"
                   .format('\033[34m{}\033[30m'.format(entry['label']),
                           " \033[7mImportant\033[0m" if entry["important"] else "",
                           " \033[7mPrinted\033[0m" if entry["printed"] else "",
-                          " \033[7mTo Read\033[0m" if entry["to_read"] else "",
+                          " \033[7mTo Read\033[0m" if not entry["read"] else "",
                           " \033[7mNotes\033[0m" if entry["notes"] else "",
                           '\033[4m{}\033[0m'.format(entry['title']),
-                          '\033[3m{}\033[0m'.format(', '.join(entry['authors'])),
-                          entry['journal'],
-                          '\033[1m{}\033[0m'.format(entry['issue']),
-                          entry['number'],
-                          entry['year']))
+                          '\033[3m{}\033[0m'.format(', '.join(entry['authors']))))
+
+            # Type specific information
+            print("    {} ({})".format(reference_types[entry['type']].FormatSpecificInfo(entry),
+                                       entry['year']))
 
             # Tags and notes
             if not config.compact:
@@ -232,10 +341,54 @@ class LitMan:
 
             print()
 
+    def Remove(self, config):
+        # Load the database
+        litman_db = self.LoadDB(config)
+
+        # Remove the file
+        if config.delete_file:
+            os.remove(litman_db[config.ref]['file'])
+        else:
+            archive_path = '{}/{}'.format(self.LitManFiles, 'archive')
+            if not os.path.exists(archive_path):
+                os.mkdir(archive_path)
+            shutil.move(litman_db[config.ref]['file'],
+                        os.path.join(archive_path, os.path.basename(litman_db[config.ref]['file'])))
+
+        # Delete from database
+        del litman_db[config.ref]
+        self.Resave(litman_db)
+
     def Resave(self, litman_db):
         with open(self.LitManDB, 'w') as outfile:
             yaml.dump(litman_db, outfile, default_flow_style=False, allow_unicode=True)
         self.Cache()
+
+    def Summary(self, config):
+        # Load the database
+        litman_db = self.LoadDB(config)
+        categories = []
+        tags = []
+        for entry in litman_db:
+            if litman_db[entry]['category'] not in categories:
+                categories.append(litman_db[entry]['category'])
+            for tag in litman_db[entry]['tags']:
+                if tag not in tags:
+                    tags.append(tag)
+        categories.sort()
+        tags.sort()
+        print("\033[1;5m\nSummary:\033[0m\n")
+        print("\033[1m{} references\033[0m\n".format(len(litman_db)))
+        print("\033[34m{} categories:\t\t\033[31m{} tags:\033[0m"
+              .format(len(categories), len(tags)))
+        for item in range(max(len(categories), len(tags))):
+            if item < len(categories) and item < len(tags):
+                print("\033[34m - {:20}\033[31m  - {:20}\033[0m".format(categories[item], tags[item]))
+            elif item < len(categories):
+                print("\033[34m - {:20}\033[0m".format(categories[item]))
+            elif item < len(tags):
+                print("\033[31m   {:20}  - {:20}\033[0m".format(' ', tags[item]))
+        print()
 
     def Winnow(self, litman_db, config):
         # Return all entries by default
@@ -282,7 +435,13 @@ class LitMan:
         if 'to_read' in config and config.to_read:
             keep = []
             for i_entry,entry in enumerate(entries):
-                if entry['to_read']:
+                if not entry['read']:
+                    keep.append(i_entry)
+            entries = [e for i,e in enumerate(entries) if i in keep]
+        if 'read' in config and config.read:
+            keep = []
+            for i_entry,entry in enumerate(entries):
+                if entry['read']:
                     keep.append(i_entry)
             entries = [e for i,e in enumerate(entries) if i in keep]
 
@@ -302,29 +461,34 @@ def ParseArguments():
 
     # Add
     add_parser = subparser.add_parser("add", help="Add reference to LitMan.")
+    add_parser.add_argument("--keep_original_file", action='store_true',
+                            help="Do not remove the original file after importing to LitMan.")
     add_subparser = add_parser.add_subparsers(title="literature type", dest="type")
     add_subparser.required = True
 
-    article_parser = add_subparser.add_parser("article", help="Add article-type reference.")
-    article_object = LitManArticle()
-    for var in vars(article_object):
-        article_parser.add_argument("--{}".format(var), required=True,
-                                    type=type(vars(article_object)[var][0]) if type(vars(article_object)[var])==list else type(var),
-                                    nargs='+' if type(vars(article_object)[var])==list else '?')
+    ref_parsers = {}
+    for ref_type in reference_types:
+        ref_parsers[ref_type] = add_subparser.add_parser(ref_type,
+                                                         help="Add {}-type reference.".format(ref_type))
+        ref_object = reference_types[ref_type]
+        for var in sorted(vars(ref_object)):
+            if type(vars(ref_object)[var]) == bool:
+                ref_parsers[ref_type] .add_argument("--{}".format(var),
+                                                    action='store_true')
+            else:
+                this_type = type(vars(ref_object)[var][0]) if type(vars(ref_object)[var]) == list else type(var)
+                this_nargs = '+' if type(vars(ref_object)[var])==list else None
+                ref_parsers[ref_type] .add_argument("--{}".format(var),
+                                                    required=True,
+                                                    type=this_type,
+                                                    nargs=this_nargs)
 
-    conference_parser = add_subparser.add_parser("conference", help="Add conference-type reference.")
-    conference_object = LitManConference()
-    for var in vars(conference_object):
-        conference_parser.add_argument("--{}".format(var), required=True,
-                                       type=type(vars(conference_object)[var][0]) if type(vars(conference_object)[var])==list else type(var),
-                                       nargs='+' if type(vars(conference_object)[var])==list else 1)
-
-    thesis_parser = add_subparser.add_parser("thesis", help="Add thesis-type reference.")
-    thesis_object = LitManThesis()
-    for var in vars(thesis_object):
-        thesis_parser.add_argument("--{}".format(var), required=True,
-                                   type=type(vars(thesis_object)[var][0]) if type(vars(thesis_object)[var])==list else type(var),
-                                   nargs='+' if type(vars(thesis_object)[var])==list else 1)
+    # Remove
+    remove_parser = subparser.add_parser("remove", help="Remove reference.")
+    remove_parser.add_argument("--ref", type=str, required=True,
+                               help="LitMan reference.")
+    remove_parser.add_argument("--delete_file", action='store_true',
+                               help="Permanently delete file instead of moving to archive.")
 
     # Edit
     edit_parser = subparser.add_parser("edit", help="Edit existing reference.")
@@ -357,18 +521,25 @@ def ParseArguments():
     link_parser.add_argument("--cite", type=str, required=True,
                              help="Literature cited by this reference.")
 
+    # Summary
+    summary_parser = subparser.add_parser("summary", help="Summarize references in LitMan.")
+
     # List
     list_parser = subparser.add_parser("list", help="List references in LitMan.")
     list_parser.add_argument("--search", type=str, nargs='+',
                              help="Search terms.")
     list_parser.add_argument("--ref", type=str, nargs='+',
                              help="LitMan reference.")
+    list_parser.add_argument("--category", type=str, nargs='+',
+                             help="Categories to filter.")
     list_parser.add_argument("--authors", type=str, nargs='+',
                              help="Authors to filter.")
     list_parser.add_argument("--important", action='store_true',
                              help="List only references marked as important.")
     list_parser.add_argument("--to_read", action='store_true',
                              help="List only references marked as to-read.")
+    list_parser.add_argument("--read", action='store_true',
+                             help="List only references marked as read.")
     list_parser.add_argument("--compact", action='store_true',
                              help="Print items in a compact view.")
     list_parser.add_argument("--links", action='store_true',
@@ -412,10 +583,14 @@ def main():
             litman.Add(config)
         case "edit":
             litman.Edit(config)
+        case "remove":
+            litman.Remove(config)
         case "mark":
             litman.Mark(config)
         case "link":
             litman.Link(config)
+        case "summary":
+            litman.Summary(config)
         case "list":
             litman.List(config)
         case "open":
