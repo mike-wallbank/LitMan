@@ -42,7 +42,10 @@ class LitManReference:
         self.references = []
         self.citations = []
 
-# Article class
+    def Strip(self, attribute):
+        return attribute.replace(' ', '').replace('.', '').replace(':', '')
+
+# Article reference type
 class LitManArticle(LitManReference):
     def __init__(self):
         self.InitRequiredAttributes()
@@ -61,8 +64,7 @@ class LitManArticle(LitManReference):
         self.Label()
 
     def Label(self):
-        journal_strip = self.journal.replace(' ', '').replace('.', '')
-        self.label = journal_strip+'_'+str(self.issue)+'_'+self.number+'_'+str(self.year)
+        self.label = super().Strip(self.journal)+'_'+str(self.issue)+'_'+self.number+'_'+str(self.year)
 
     @staticmethod
     def FormatSpecificInfo(article):
@@ -71,7 +73,7 @@ class LitManArticle(LitManReference):
                                  article['number'])
 
 
-# Conference class
+# Conference reference type
 class LitManConference(LitManReference):
     def __init__(self):
         self.InitRequiredAttributes()
@@ -90,16 +92,15 @@ class LitManConference(LitManReference):
         self.Label()
 
     def Label(self):
-        conference_strip = self.conference.replace(' ', '').replace('.', '')
-        self.label = conference_strip+'_'+str(self.number)+'_'+str(self.year)
+        self.label = super().Strip(self.conference)+'_'+str(self.number)+'_'+str(self.year)
 
     @staticmethod
     def FormatSpecificInfo(conference):
-        return "{}, {} {}".format(conference['conference'],
-                                  conference['location'],
-                                  conference['number'])
+        return "{}, {}, {}".format(conference['conference'],
+                                   conference['location'],
+                                   conference['number'])
 
-# Note class
+# Note reference type
 class LitManNote(LitManReference):
     def __init__(self):
         self.InitRequiredAttributes()
@@ -114,14 +115,13 @@ class LitManNote(LitManReference):
         self.Label()
 
     def Label(self):
-        name_strip = self.name.replace(' ', '').replace('.', '')
-        self.label = name_strip+'_'+str(self.year)
+        self.label = super().Strip(self.name)+'_'+str(self.year)
 
     @staticmethod
     def FormatSpecificInfo(note):
         return note['name']
 
-# Thesis class
+# Thesis reference type
 class LitManThesis(LitManReference):
     def __init__(self):
         self.InitRequiredAttributes()
@@ -139,17 +139,40 @@ class LitManThesis(LitManReference):
 
     def Label(self):
         author_strip = self.authors[0].strip().split()[1]
-        university_strip = self.university.replace(' ', '').replace('.', '')
-        self.label = author_strip+'_'+university_strip+'_'+str(self.year)
+        self.label = author_strip+'_'+super().Strip(self.university)+'_'+str(self.year)
 
     @staticmethod
     def FormatSpecificInfo(thesis):
         return "{}, {}".format(thesis['university'], thesis['department'])
 
+# Book reference type
+class LitManBook(LitManReference):
+    def __init__(self):
+        self.InitRequiredAttributes()
+
+    def InitRequiredAttributes(self):
+        super().InitRequiredAttributes()
+        self.publisher = ""
+        self.edition = ""
+
+    def Initialize(self, config):
+        super().Initialize(config)
+        self.publisher = config.publisher
+        self.edition = config.edition
+        self.Label()
+
+    def Label(self):
+        self.label = super().Strip(self.title)+'_'+self.edition+'Edition_'+super().Strip(self.publisher)
+
+    @staticmethod
+    def FormatSpecificInfo(book):
+        return "{}, {} Edition".format(book['publisher'], book['edition'])
+
 reference_types = {"article":LitManArticle(),
                    "conference":LitManConference(),
                    "note":LitManNote(),
-                   "thesis":LitManThesis()}
+                   "thesis":LitManThesis(),
+                   "book":LitManBook()}
 
 class LitMan:
     def __init__(self, directory):
@@ -290,7 +313,7 @@ class LitMan:
         litman_db = self.LoadDB(config)
         entries = self.Winnow(litman_db, config)
         if not len(entries):
-            print("\033[5;1m\nNo entries found.\n\033[0m")
+            print("\033[5;1m\nNo entries found!\n\033[0m")
             exit()
         if config.all:
             file_list = " ".join([e['file'] for e in entries])
@@ -301,7 +324,10 @@ class LitMan:
     def PrintReferences(self, litman_db, entries, config):
         # This flashes because I got carried away
         # with the ANSI formatting
-        print("\033[1;5m\nMatching entries:\033[0m\n")
+        if len(entries):
+            print("\033[1;5m\nMatching entries:\033[0m\n")
+        else:
+            print("\033[5;1m\nNo entries found!\n\033[0m")
 
         # Print each selected entry
         for entry in entries:
