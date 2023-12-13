@@ -294,6 +294,8 @@ class LitMan:
     def List(self, config):
         litman_db = self.LoadDB(config)
         entries = self.Winnow(litman_db, config)
+        if config.clipboard and len(entries):
+            os.system("echo {} | tr -d '\n' | pbcopy".format(entries[0]['label'].strip()))
         self.PrintReferences(litman_db, entries, config)
 
     def LoadDB(self, config):
@@ -601,6 +603,8 @@ def ParseArguments():
                              help="Print items in a compact view.")
     list_parser.add_argument("--links", action='store_true',
                              help="Print links for each item.")
+    list_parser.add_argument("--clipboard", action='store_true',
+                             help="Copy label of top hit to clipboard.")
 
     # Open
     open_parser = subparser.add_parser("open", help="Open file for reference in LitMan.")
