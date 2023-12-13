@@ -222,6 +222,17 @@ class LitMan:
             with open(self.LitManCache, 'wb') as litman_pickle_file:
                 pickle.dump(litman_db, litman_pickle_file, protocol=pickle.HIGHEST_PROTOCOL)
 
+    def Confirm(self, prompt):
+        choice = None
+        while choice is None:
+            in_choice = input(prompt+" [y/n] ")
+            if in_choice.lower() == 'y' or in_choice.lower() == 'yes':
+                choice = 'y'
+            if in_choice.lower() == 'n' or in_choice.lower() == 'no':
+                choice = 'n'
+        if choice == 'n':
+            exit()
+
     def Edit(self, config):
         # Get the database
         litman_db = self.LoadDB(config)
@@ -235,10 +246,28 @@ class LitMan:
         if config.add_tag is not None:
             ref["tags"].append(config.add_tag)
             ref["tags"].sort()
+
         if config.rm_tag is not None:
+            self.Confirm("Remove tag {} from {}?".format(config.rm_tag, config.ref))
             ref["tags"].remove(config.rm_tag)
+
         if config.rm_note is not None:
+            self.Confirm("Remove note {} from {}?".format(config.rm_note, config.ref))
             del ref["notes"][config.rm_note]
+
+        if config.rm_ref is not None:
+            cited = litman_db[ref["references"][config.rm_ref]]
+            self.Confirm("Remove reference {} from {} (and citation {} from {})?"
+                         .format(cited['label'], config.ref, config.ref, cited['label']))
+            ref["references"].remove(cited['label'])
+            cited["citations"].remove(config.ref)
+
+        if config.rm_cite is not None:
+            refed = litman_db[ref["citations"][config.rm_cite]]
+            self.Confirm("Remove citation {} from {} (and reference {} from {})?"
+                         .format(refed['label'], config.ref, config.ref, refed['label']))
+            ref['citations'].remove(refed['label'])
+            refed['references'].remove(config.ref)
 
         self.Resave(litman_db)
 
@@ -524,6 +553,10 @@ def ParseArguments():
                              help="Remove tag from reference.")
     edit_parser.add_argument("--rm_note", type=int,
                              help="Remove note (by note index, starting from 0) from reference.")
+    edit_parser.add_argument("--rm_ref", type=int,
+                             help="Remove reference (by index, starting from 0) from reference.")
+    edit_parser.add_argument("--rm_cite", type=int,
+                             help="Remove citation (by index, starting from 0) from reference.")
 
     # Mark
     mark_parser = subparser.add_parser("mark", help="Mark reference with label.")
@@ -582,7 +615,7 @@ def ParseArguments():
     note_parser = subparser.add_parser("note", help="Add note to existing reference.")
     note_parser.add_argument("--ref", type=str, required=True,
                              help="LitMan reference.")
-    note_parser.add_argument("--note", type=str, nargs='+', required=True,
+    note_parser.add_argument("--note", type=str, required=True, action='append',
                              help="Add note to reference; multiple entries can be made in bullet-point style.")
 
     return parser.parse_args()
