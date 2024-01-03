@@ -179,13 +179,13 @@ class LitMan:
 
         # Set required paths
         if 'directory' not in config or 'backup' not in config:
-            raise RuntimeError("\nLitMan directory and backup required (use \033[1mlitman setup\033[0m).\n")
+            raise RuntimeError("\n\033[31mLitMan directory and backup required (use \033[31;1mlitman setup\033[31m).\033[31m\n")
         self.LitManDir = config['directory']
         if not os.path.exists(self.LitManDir):
-            raise RuntimeError("\nLitMan directory {} does not exist.".format(self.LitManDir))
+            raise RuntimeError("\n\033[31mLitMan directory {} does not exist.\033[0m".format(self.LitManDir))
         self.BackupDir = config['backup']
         if not os.path.exists(self.LitManDir):
-            raise RuntimeError("\nLitMan directory {} does not exist.".format(self.LitManDir))
+            raise RuntimeError("\n\033[31mLitMan directory {} does not exist.\033[0m".format(self.LitManDir))
 
         # Set database files
         self.LitManDB = self.LitManDir+'/litman.yaml'
@@ -206,7 +206,7 @@ class LitMan:
         # Ensure this is a new entry
         litman_db = self.LoadDB(config)
         if litman_db is not None and new_ref.label in litman_db:
-            raise NameError("Reference {} already exists in database.".format(new_ref.label))
+            raise NameError("\033[31mReference \033[34m{}\033[31m already exists in database.\033[0m".format(new_ref.label))
 
         # Copy file
         copy_path = '{}/{}'.format(self.LitManFiles, config.category.lower())
@@ -232,10 +232,10 @@ class LitMan:
         with open("{}/.litman".format(os.path.expanduser("~")), 'r') as litman_config_file:
             litman_config = yaml.safe_load(litman_config_file)
         if 'backup' not in litman_config:
-            raise RuntimeError("\nLitMan backup directory not set (use \033[1mlitman setup --backup\033[0m to add).\n")
+            raise RuntimeError("\n\033[31mLitMan backup directory not set (use \033[31;1mlitman setup --backup\033[31m to add)\033[0m.\n")
         backup_directory = litman_config['backup']
         if not os.path.exists(backup_directory):
-            raise RuntimeError("LitMan backup directory {} does not exist.".format(backup_directory))
+            raise RuntimeError("\n\033[31mLitMan backup directory {} does not exist.\033[0m\n".format(backup_directory))
         copy_path = backup_directory+'/'+os.path.basename(self.LitManDB)+'.backup'
         shutil.copy(self.LitManDB, copy_path)
 
@@ -251,7 +251,7 @@ class LitMan:
 
         # Find the requested reference
         if config.ref not in litman_db:
-            raise ValueError("Requested reference {} not in database.".format(config.ref))
+            raise ValueError("\n\033[31mRequested reference \033[34m{}\033[31m not in database.\033[0m\n".format(config.ref))
         ref = litman_db[config.ref]
 
         # Make edits
@@ -289,12 +289,12 @@ class LitMan:
 
         # Find the requested reference
         if config.ref not in litman_db:
-            raise ValueError("Requested reference {} not in database.".format(config.ref))
+            raise ValueError("\n\033[31mRequested reference \033[34m{}\033[31m not in database.\033[0m\n".format(config.ref))
         ref = litman_db[config.ref]
 
         # Find the citated reference
         if config.cite not in litman_db:
-            raise ValueError("Requested reference {} not in database.".format(config.cite))
+            raise ValueError("\n\033[31mRequested reference \033[34m{}\033[31m not in database.\033[0m\n".format(config.cite))
         cite = litman_db[config.cite]
 
         # Link!
@@ -323,7 +323,7 @@ class LitMan:
         # Find the requested reference
         litman_db = self.LoadDB(config)
         if config.ref not in litman_db:
-            raise ValueError("Requested reference {} not in database.".format(config.ref))
+            raise ValueError("\n\033[31mRequested reference \033[34m{}\033[31m not in database.\033[0m\n".format(config.ref))
         ref = litman_db[config.ref]
 
         # Mark with requested tag
@@ -342,7 +342,7 @@ class LitMan:
         # Find the requested reference
         litman_db = self.LoadDB(config)
         if config.ref not in litman_db:
-            raise ValueError("Requested reference {} not in database.".format(config.ref))
+            raise ValueError("\n\033[31mRequested reference \033[34m{}\033[31m not in database.\033[0m\n".format(config.ref))
         ref = litman_db[config.ref]
 
         # Add notes
@@ -389,22 +389,20 @@ class LitMan:
             print("    {} ({})".format(reference_types[entry['type']].FormatSpecificInfo(entry),
                                        entry['year']))
 
-            # Tags and notes
+            # Tags, notes and links
             if not config.compact:
                 print("  (\033[31m{}\033[30m)".format(' '.join(entry['tags'])))
                 for note in entry['notes']:
                     print("\033[2m    - {}\033[0m".format(note))
-
-            # Links
-            if config.links:
-                print("  \033[32mCitations:\033[0m")
-                for citation in entry['citations']:
-                    cite = litman_db[citation]
-                    print("    - {}: {} ({})".format(cite['label'], cite['title'], cite['year']))
-                print("  \033[32mReferences:\033[0m")
-                for reference in entry['references']:
-                    ref = litman_db[reference]
-                    print("    - {}: {} ({})".format(ref['label'], ref['title'], ref['year']))
+                if len(entry['citations']) or len(entry['references']):
+                    print("  \033[32mCitations:\033[0m")
+                    for citation in entry['citations']:
+                        cite = litman_db[citation]
+                        print("    - {}: {} ({})".format(cite['label'], cite['title'], cite['year']))
+                    print("  \033[32mReferences:\033[0m")
+                    for reference in entry['references']:
+                        ref = litman_db[reference]
+                        print("    - {}: {} ({})".format(ref['label'], ref['title'], ref['year']))
 
             print()
 
@@ -477,7 +475,7 @@ class LitMan:
             entries = []
             for ref in config.ref:
                 if ref not in litman_db:
-                    raise ValueError("Requested entry {} not in database.".format(config.label))
+                    raise ValueError("\n\033[31mRequested entry \033[34m{}\033[31m not in database.\033[0m\n".format(ref))
                 entries.append(litman_db[ref])
 
         # Search
@@ -488,6 +486,7 @@ class LitMan:
                     if term.lower() in entry['title'].lower() or \
                        term.lower() in [t.lower() for t in entry['tags']] or \
                        term.lower() in ' '.join([a.lower() for a in entry['authors']]) or \
+                       ('journal' in entry and term.lower() in entry['journal'].lower()) or \
                        term in str(entry['year']):
                         pass
                     else:
@@ -652,8 +651,6 @@ def ParseArguments():
                              help="List only references marked as read.")
     list_parser.add_argument("--compact", action='store_true',
                              help="Print items in a compact view.")
-    list_parser.add_argument("--links", action='store_true',
-                             help="Print links for each item.")
     list_parser.add_argument("--clipboard", action='store_true',
                              help="Copy label of top hit to clipboard.")
 
@@ -713,7 +710,7 @@ def main():
     with open("{}/.litman".format(os.path.expanduser("~")), 'r') as litman_config_file:
         litman_config = yaml.safe_load(litman_config_file)
     if litman_config is None:
-        raise RuntimeError("\nLitMan configuration file is empty; use \033[1mlitman setup\033[0m to configure.\n")
+        raise RuntimeError("\033[31m\nLitMan configuration file is empty; use \033[1mlitman setup\033[31m to configure.\033[0m\n")
 
     # Set up program
     litman = LitMan(litman_config)
