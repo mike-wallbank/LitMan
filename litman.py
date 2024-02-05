@@ -43,7 +43,7 @@ class LitManReference:
         self.citations = []
 
     def Strip(self, attribute):
-        return attribute.replace(' ', '').replace('.', '').replace(':', '').replace('(', '').replace(')', '')
+        return attribute.replace(' ', '').replace('.', '').replace(':', '').replace('(', '').replace(')', '').replace('/', '')
 
 # Article reference type
 class LitManArticle(LitManReference):
