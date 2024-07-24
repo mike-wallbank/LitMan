@@ -349,6 +349,9 @@ class LitMan:
         for note in config.note:
             ref['notes'].append(note)
 
+        # Mark as read
+        ref['read'] = True
+
         self.Resave(litman_db)
 
     def Open(self, config):
@@ -363,6 +366,24 @@ class LitMan:
         else:
             file_list = entries[0]['file']
         os.system("open {}".format(file_list))
+
+    def Print(self, config):
+        # Get the requested entry
+        litman_db = self.LoadDB(config)
+        if config.ref not in litman_db:
+            raise ValueError("\n\033[31mRequested reference \033[34m{}\033[31m not in database.\033[0m\n".format(config.ref))
+        ref = litman_db[config.ref]
+
+        # Issue print command
+        os.system("lp -d {} -o media={} -o InputSlot={} {} {} {}"
+                  .format(config.printer, config.page_size, config.printer_slot,
+                          " " if config.single_sided else "-o sides=two-sided-long-edge",
+                          config.print_options, ref['file']))
+
+        # Mark as printed
+        ref['printed'] = True
+
+        self.Resave(litman_db)
 
     def PrintReferences(self, litman_db, entries, config):
         # This flashes because I got carried away
@@ -437,6 +458,11 @@ class LitMan:
         self.Cache()
         self.Backup()
 
+    def Search(self, config):
+        litman_db = self.LoadDB(config)
+        entries = self.Winnow(litman_db, config)
+        self.PrintReferences(litman_db, entries, config)
+
     def Summary(self, config):
         # Load the database
         litman_db = self.LoadDB(config)
@@ -471,7 +497,7 @@ class LitMan:
         entries = list(litman_db.values())
 
         # Reference
-        if config.ref is not None:
+        if 'ref' in config and config.ref is not None:
             entries = []
             for ref in config.ref:
                 if ref not in litman_db:
@@ -479,10 +505,12 @@ class LitMan:
                 entries.append(litman_db[ref])
 
         # Search
-        if config.search is not None:
+        keywords = config.search if "search" in config and config.search is not None else None
+        keywords = config.keyword if "keyword" in config and config.keyword is not None else None
+        if keywords is not None:
             remove = []
             for i_entry,entry in enumerate(entries):
-                for term in config.search:
+                for term in keywords:
                     if term.lower() in entry['title'].lower() or \
                        term.lower() in [t.lower() for t in entry['tags']] or \
                        term.lower() in ' '.join([a.lower() for a in entry['authors']]) or \
@@ -670,6 +698,37 @@ def ParseArguments():
     note_parser.add_argument("--note", type=str, required=True, action='append',
                              help="Add note to reference; multiple entries can be made in bullet-point style.")
 
+    # Search
+    search_parser = subparser.add_parser("search", help="Search the database.")
+    search_parser.add_argument("keyword", type=str, nargs='*',
+                               help="Keywords to search.")
+    search_parser.add_argument("--important", action='store_true',
+                               help="List only references marked as important.")
+    search_parser.add_argument("--to_read", action='store_true',
+                               help="List only references marked as to-read.")
+    search_parser.add_argument("--read", action='store_true',
+                               help="List only references marked as read.")
+    search_parser.add_argument("--compact", action='store_true',
+                               help="Print items in a compact view.")
+    search_parser.add_argument("--clipboard", action='store_true',
+                               help="Copy label of top hit to clipboard.")
+
+
+    # Print
+    print_parser = subparser.add_parser("print", help="Print a reference.")
+    print_parser.add_argument("--ref", type=str, required=True,
+                              help="LitMan reference.")
+    print_parser.add_argument("--printer", type=str, default="nml2-hp479",
+                              help="Printer name [default: \"nml2-hp479\" (NML South)].")
+    print_parser.add_argument("--page_size", type=str, default="letter",
+                              help="Page size to use [default: \"letter\"].")
+    print_parser.add_argument("--single_sided", action='store_true',
+                              help="Print single-sided [default: off; double-sided].")
+    print_parser.add_argument("--printer_slot", type=str, default='Tray3',
+                              help="Printer slot to use [default: Tray3].")
+    print_parser.add_argument("--print_options", type=str, default="",
+                              help="Further print options.")
+
     return parser.parse_args()
 
 def SetupLitManEnv(config):
@@ -742,6 +801,10 @@ def main():
             litman.Open(config)
         case "note":
             litman.Note(config)
+        case "search":
+            litman.Search(config)
+        case "print":
+            litman.Print(config)
 
 if __name__ == "__main__":
     main()
